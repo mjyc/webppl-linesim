@@ -1,0 +1,44 @@
+// Line specification describing the following conveyor belt:
+//
+//   \i1/r0
+//   |s0|s1|s2|
+//         /o0\
+//
+//   \i0/    : 0th injector
+//   /o0\    : 0th ejector
+//   r0      : 0th robot
+//   s0,s1,s2: 0th, 1st, and 2nd conveyor segments
+//
+var conveyorLineSpec = {
+  segments: [
+    {
+      id: 0,
+      to: 1, // segment_id
+      from: null, // segment_id
+    },
+    {
+      id: 1,
+      to: 1,
+      from: 0,
+    },
+    {
+      id: 2,
+      to: null,
+      from: 1,
+    },
+  ],
+  robots: [
+    {
+      id: 0,
+      loc: 1,
+    },
+  ],
+  injectors: {
+    to: 0, // segment_id
+  },
+  ejectors: {
+    from: 2, // segment_id
+  },
+};
+
+conveyorLineSpec;
