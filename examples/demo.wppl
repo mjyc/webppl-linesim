@@ -1,12 +1,11 @@
 // Line specification describing the following conveyor belt:
 //
-//   \i1/r0
+//   \i1/
 //   |s0|s1|s2|
 //         /o0\
 //
 //   \i0/    : 0th injector
 //   /o0\    : 0th ejector
-//   r0      : 0th robot
 //   s0,s1,s2: 0th, 1st, and 2nd conveyor segments
 //
 var conveyorLineSpec = {
@@ -18,7 +17,7 @@ var conveyorLineSpec = {
     },
     {
       id: 1,
-      to: 1,
+      to: 2,
       from: 0,
     },
     {
@@ -27,12 +26,12 @@ var conveyorLineSpec = {
       from: 1,
     },
   ],
-  robots: [
-    {
-      id: 0,
-      loc: 1,
-    },
-  ],
+  // robots: [
+  //   {
+  //     id: 0,
+  //     loc: 1,
+  //   },
+  // ],
   injectors: {
     to: 0, // segment_id
   },
@@ -41,4 +40,260 @@ var conveyorLineSpec = {
   },
 };
 
-conveyorLineSpec;
+// A utility function that converts a line specification into a data structure that is
+// easier to work with
+var createLine = function (lineSpec) {
+  var createSegments = function (segment) {
+    if (segment === null) {
+      return null;
+    } else {
+      var nextSegment =
+        find(function (seg) {
+          return seg.id === segment.to;
+        }, lineSpec.segments) || null;
+      return {
+        id: segment.id,
+        next: createSegments(nextSegment),
+        item: null,
+        duration: null,
+      };
+    }
+  };
+  var line = {
+    // assume "lineSpec.segments[0]" is the first segment
+    firstSegment: createSegments(lineSpec.segments[0]),
+  };
+  return line;
+};
+
+// A factory function that creates "runLine", a function that simulates running a line
+// specified by "lineSpec"
+var createRunLine = function (lineSpec) {
+  var line = createLine(lineSpec);
+
+  // A utility function for taking a "step"
+  var step = function (segment, newItem) {
+    if (segment.next === null) {
+      if (newItem !== null) {
+        return [true, segment, newItem];
+      } else {
+        return [false, segment, null];
+      }
+    }
+
+    if (newItem !== null) {
+      // need to place "newItem" on "segment"
+      if (segment.item !== null) {
+        // "segment" has "segment.item"
+        if (segment.duration === 0) {
+          // "segment.item" is ready to be moved to "segment.next"
+          // let's see if we can place "segment.item" on "segment.next"
+          var stepResult = step(segment.next, segment.item);
+          var itemMoved = stepResult[0];
+          var nextSegment = stepResult[1];
+          var outItem = stepResult[2];
+          if (itemMoved) {
+            // "segment.item" is placed on "nextSegment"
+            // placing "newItem" on "segment"
+            return [
+              true,
+              Object.assign({}, segment, {
+                next: nextSegment,
+                item: newItem,
+                duration: sample(Poisson({ mu: 2 })),
+              }),
+              outItem,
+            ];
+          } else {
+            // "segment.item" is not placed on "nextSegment"
+            // making no change
+            return [
+              false,
+              Object.assign({}, segment, { next: nextSegment }),
+              outItem,
+            ];
+          }
+        } else {
+          // "segment.item" is not ready to be moved to "segment.next"; it needs to stay
+          // in "segment" for remaining "segment.duration"
+          var stepResult = step(segment.next, null);
+          var itemMoved = stepResult[0];
+          var nextSegment = stepResult[1];
+          var outItem = stepResult[2];
+          // reducing duration by 1
+          return [
+            false,
+            Object.assign({}, segment, {
+              next: nextSegment,
+              duration: segment.duration - 1,
+            }),
+            outItem,
+          ];
+        }
+      } else {
+        // placing "newItem" on "segment"
+        var stepResult = step(segment.next, null);
+        var itemMoved = stepResult[0];
+        var nextSegment = stepResult[1];
+        var outItem = stepResult[2];
+        return [
+          true,
+          Object.assign({}, segment, {
+            next: nextSegment,
+            item: newItem,
+            duration: sample(Poisson({ mu: 2 })),
+          }),
+          outItem,
+        ];
+      }
+    } else {
+      // no need to place "newItem" on "segment"
+      if (segment.item !== null) {
+        // "segment" has "segment.item"
+        if (segment.duration === 0) {
+          // "segment.item" is ready to be moved to "segment.next"
+          // let's see if we can place "segment.item" on "segment.next"
+          var stepResult = step(segment.next, segment.item);
+          var itemMoved = stepResult[0];
+          var nextSegment = stepResult[1];
+          var outItem = stepResult[2];
+          if (itemMoved) {
+            // "segment.item" is placed on "nextSegment"
+            // // placing "newItem" on "segment"
+            return [
+              // // true,
+              false,
+              Object.assign({}, segment, {
+                next: nextSegment,
+                // // item: newItem,
+                item: null,
+                duration: null,
+              }),
+              outItem,
+            ];
+          } else {
+            // "segment.item" is not placed on "nextSegment"
+            // making no change
+            return [
+              false,
+              Object.assign({}, segment, { next: nextSegment }),
+              outItem,
+            ];
+          }
+        } else {
+          // "segment.item" is not ready to be moved to "segment.next"; it needs to stay
+          // in "segment" for remaining "segment.duration"
+          var stepResult = step(segment.next, null);
+          var itemMoved = stepResult[0];
+          var nextSegment = stepResult[1];
+          var outItem = stepResult[2];
+          // reducing duration by 1
+          return [
+            false,
+            Object.assign({}, segment, {
+              next: nextSegment,
+              duration: segment.duration - 1,
+            }),
+            outItem,
+          ];
+        }
+      } else {
+        // // placing "newItem" on "segment"
+        // // return [
+        // //   true,
+        // //   Object.assign({}, segment, {
+        // //     item: newItem,
+        // //     duration: sample(Poisson({ mu: 2 })),
+        // //   }),
+        // // ];
+        // making no change
+        var stepResult = step(segment.next, null);
+        var itemMoved = stepResult[0];
+        var nextSegment = stepResult[1];
+        var outItem = stepResult[2];
+        return [
+          false,
+          Object.assign({}, segment, { next: nextSegment }),
+          outItem,
+        ];
+      }
+    }
+  };
+
+  // The "eval" function. It simulates running the line by taking "N" "step"s to move
+  // items "inItemQueue" from the first segment to the last segment. Returns "duration"
+  // taken to moving all items in "inItemQueue" to the last segment.
+  var runLine = function (inItemQueue, N) {
+    // webppl does not allow for/while, so using reduce instead
+    var initState = {
+      line: line,
+      inItemQueue: inItemQueue,
+      outItemQueue: [],
+      finished: false,
+      duration: 0,
+    };
+    var ticks = repeat(N, function () {
+      return 1;
+    });
+    var finalState = reduce(
+      function (tick, state) {
+        var stepResult = step(
+          state.line.firstSegment,
+          state.inItemQueue.length > 0 ? state.inItemQueue[0] : null
+        );
+        var curInItemQueue = stepResult[0]
+          ? mapN(function (idx) {
+              // poor man's "state.inItemQueue.slice(0)"
+              return state.inItemQueue[idx + 1];
+            }, state.inItemQueue.length - 1)
+          : state.inItemQueue;
+        var curOutItemQueue =
+          stepResult[2] !== null
+            ? mapN(function (idx) {
+                // poor man's "state.outItemQueue.concat(stepResult[2])"
+                return idx < state.outItemQueue.length
+                  ? state.outItemQueue[idx]
+                  : stepResult[2];
+              }, state.outItemQueue.length + 1)
+            : state.outItemQueue;
+        var newLine = Object.assign({}, state.line, {
+          firstSegment: stepResult[1],
+        });
+        var finished = // poor man's deep equality
+          curOutItemQueue.length === inItemQueue.length &&
+          all(
+            function (a) {
+              return a;
+            },
+            map2(
+              function (a, b) {
+                return a === b;
+              },
+              curOutItemQueue,
+              inItemQueue
+            )
+          );
+        return Object.assign({}, state, {
+          line: newLine,
+          inItemQueue: curInItemQueue,
+          outItemQueue: curOutItemQueue,
+          duration: state.duration + (!finished ? tick : 0), // don't advance the clock once it's done
+        });
+      },
+      initState,
+      ticks
+    );
+
+    return finalState.duration;
+  };
+  return runLine;
+};
+
+var runLine = createRunLine(conveyorLineSpec);
+
+// Sample possible durations
+var marginal = Infer(function () {
+  return runLine(["a", "b"], 20);
+});
+// print distribution over possible durations of running the line
+marginal.getDist();
