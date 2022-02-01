@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "webppl": "^0.9.15"
+    "webppl": "0.9.15"
   }
 }

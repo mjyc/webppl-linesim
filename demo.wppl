@@ -1,14 +1,13 @@
-// Line specification describing the following conveyor belt:
+// Specification describing the following line:
 //
-//   \i1/
+//   \  /
 //   |s0|s1|s2|
-//         /o0\
+//         /  \
 //
-//   \i0/    : 0th injector
-//   /o0\    : 0th ejector
-//   s0,s1,s2: 0th, 1st, and 2nd conveyor segments
+//   s0, s1, s2 means 0th, 1st, and 2nd segments and one can place an items at s0 and
+//   the line eject the item at s2
 //
-var conveyorLineSpec = {
+var lineSpec = {
   segments: [
     {
       id: 0,
@@ -26,22 +25,16 @@ var conveyorLineSpec = {
       from: 1,
     },
   ],
-  // robots: [
-  //   {
-  //     id: 0,
-  //     loc: 1,
-  //   },
-  // ],
-  injectors: {
+  placer: {
     to: 0, // segment_id
   },
-  ejectors: {
+  ejector: {
     from: 2, // segment_id
   },
 };
 
-// A utility function that converts a line specification into a data structure that is
-// easier to work with
+// A utility function that converts a specification into a data structure that is easier
+// to work with
 var createLine = function (lineSpec) {
   var createSegments = function (segment) {
     if (segment === null) {
@@ -66,9 +59,9 @@ var createLine = function (lineSpec) {
   return line;
 };
 
-// A factory function that creates "runLine", a function that simulates running a line
-// specified by "lineSpec"
-var createRunLine = function (lineSpec) {
+// A factory function that returns "run", a function that simulates processing the line
+// for "maxNumSteps" "step"s and returns "duration" taken to process all "inputItems".
+var createRun = function (lineSpec) {
   var line = createLine(lineSpec);
 
   // A utility function for taking a "step"
@@ -159,13 +152,10 @@ var createRunLine = function (lineSpec) {
           var outItem = stepResult[2];
           if (itemMoved) {
             // "segment.item" is placed on "nextSegment"
-            // // placing "newItem" on "segment"
             return [
-              // // true,
               false,
               Object.assign({}, segment, {
                 next: nextSegment,
-                // // item: newItem,
                 item: null,
                 duration: null,
               }),
@@ -198,14 +188,6 @@ var createRunLine = function (lineSpec) {
           ];
         }
       } else {
-        // // placing "newItem" on "segment"
-        // // return [
-        // //   true,
-        // //   Object.assign({}, segment, {
-        // //     item: newItem,
-        // //     duration: sample(Poisson({ mu: 2 })),
-        // //   }),
-        // // ];
         // making no change
         var stepResult = step(segment.next, null);
         var itemMoved = stepResult[0];
@@ -220,47 +202,44 @@ var createRunLine = function (lineSpec) {
     }
   };
 
-  // The "eval" function. It simulates running the line by taking "N" "step"s to move
-  // items "inItemQueue" from the first segment to the last segment. Returns "duration"
-  // taken to moving all items in "inItemQueue" to the last segment.
-  var runLine = function (inItemQueue, N) {
+  var run = function (inputItems, maxNumSteps) {
     // webppl does not allow for/while, so using reduce instead
     var initState = {
       line: line,
-      inItemQueue: inItemQueue,
-      outItemQueue: [],
+      inputItems: inputItems,
+      outputItems: [],
       finished: false,
       duration: 0,
     };
-    var ticks = repeat(N, function () {
+    var ticks = repeat(maxNumSteps, function () {
       return 1;
     });
     var finalState = reduce(
       function (tick, state) {
         var stepResult = step(
           state.line.firstSegment,
-          state.inItemQueue.length > 0 ? state.inItemQueue[0] : null
+          state.inputItems.length > 0 ? state.inputItems[0] : null
         );
-        var curInItemQueue = stepResult[0]
+        var curInputItems = stepResult[0]
           ? mapN(function (idx) {
-              // poor man's "state.inItemQueue.slice(0)"
-              return state.inItemQueue[idx + 1];
-            }, state.inItemQueue.length - 1)
-          : state.inItemQueue;
-        var curOutItemQueue =
+              // poor man's "state.inputItems.slice(0)"
+              return state.inputItems[idx + 1];
+            }, state.inputItems.length - 1)
+          : state.inputItems;
+        var curOutputItems =
           stepResult[2] !== null
             ? mapN(function (idx) {
-                // poor man's "state.outItemQueue.concat(stepResult[2])"
-                return idx < state.outItemQueue.length
-                  ? state.outItemQueue[idx]
+                // poor man's "state.outputItems.concat(stepResult[2])"
+                return idx < state.outputItems.length
+                  ? state.outputItems[idx]
                   : stepResult[2];
-              }, state.outItemQueue.length + 1)
-            : state.outItemQueue;
+              }, state.outputItems.length + 1)
+            : state.outputItems;
         var newLine = Object.assign({}, state.line, {
           firstSegment: stepResult[1],
         });
         var finished = // poor man's deep equality
-          curOutItemQueue.length === inItemQueue.length &&
+          curOutputItems.length === inputItems.length &&
           all(
             function (a) {
               return a;
@@ -269,14 +248,14 @@ var createRunLine = function (lineSpec) {
               function (a, b) {
                 return a === b;
               },
-              curOutItemQueue,
-              inItemQueue
+              curOutputItems,
+              inputItems
             )
           );
         return Object.assign({}, state, {
           line: newLine,
-          inItemQueue: curInItemQueue,
-          outItemQueue: curOutItemQueue,
+          inputItems: curInputItems,
+          outputItems: curOutputItems,
           duration: state.duration + (!finished ? tick : 0), // don't advance the clock once it's done
         });
       },
@@ -286,14 +265,15 @@ var createRunLine = function (lineSpec) {
 
     return finalState.duration;
   };
-  return runLine;
+  return run;
 };
 
-var runLine = createRunLine(conveyorLineSpec);
-
-// Sample possible durations
+// Sample possible "duration"s
+var run = createRun(lineSpec);
+var inputItems = ["a", "b"];
+var maxNumSteps = 20;
 var marginal = Infer(function () {
-  return runLine(["a", "b"], 20);
+  return run(inputItems, maxNumSteps);
 });
 // print distribution over possible durations of running the line
 marginal.getDist();
