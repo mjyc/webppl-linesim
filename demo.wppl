@@ -1,4 +1,9 @@
-// Specification describing the following line:
+// Let's say we are interested in the expected throughput of a line. In this demo, I
+// demonstrate how to use a probabilistic programming language to (1) build a
+// statistical model of a line and (2) use the model to infer the throughput
+// distribution.
+
+// Here is a apecification describing the following line:
 //
 //   \  /
 //   |s0|s1|s2|
@@ -33,8 +38,9 @@ var lineSpec = {
   },
 };
 
-// A utility function that converts a specification into a data structure that is easier
-// to work with
+// This helper function converts a specification into a data structure that is easier to
+// work with. The output data structure represents the "given" variables (e.g., Y in
+// P(X|Y) where X is a random variable representing the throughput)
 var createLine = function (lineSpec) {
   var createSegments = function (segment) {
     if (segment === null) {
@@ -59,12 +65,15 @@ var createLine = function (lineSpec) {
   return line;
 };
 
-// A factory function that returns "run", a function that simulates processing the line
+// This is factory function returns "run", a function that simulates processing the line
 // for "maxNumSteps" "step"s and returns "duration" taken to process all "inputItems".
+// Evaluating "run" is equivalent to sampling from P(X|Y).
 var createRun = function (lineSpec) {
   var line = createLine(lineSpec);
 
-  // A utility function for taking a "step"
+  // A helper function for taking a "step"; This function is the most important piece in
+  // this demo. It shows how to simulate the single discrete step line activity using a
+  // single recursive function.
   var step = function (segment, newItem) {
     if (segment.next === null) {
       if (newItem !== null) {
@@ -268,12 +277,32 @@ var createRun = function (lineSpec) {
   return run;
 };
 
-// Sample possible "duration"s
+// Let's sample possible "duration"s
 var run = createRun(lineSpec);
 var inputItems = ["a", "b"];
 var maxNumSteps = 20;
 var marginal = Infer(function () {
   return run(inputItems, maxNumSteps);
 });
-// print distribution over possible durations of running the line
+// and print distribution over possible durations of running the line
 marginal.getDist();
+
+// The output usually looks something like:
+// {
+//   '3': { val: 3, prob: 0.001 },
+//   '4': { val: 4, prob: 0.002 },
+//   '5': { val: 5, prob: 0.02 },
+//   '6': { val: 6, prob: 0.048 },
+//   '7': { val: 7, prob: 0.09 },
+//   '8': { val: 8, prob: 0.163 },
+//   '9': { val: 9, prob: 0.174 },
+//   '10': { val: 10, prob: 0.164 },
+//   '11': { val: 11, prob: 0.128 },
+//   '12': { val: 12, prob: 0.09 },
+//   '13': { val: 13, prob: 0.058 },
+//   '14': { val: 14, prob: 0.035 },
+//   '15': { val: 15, prob: 0.012 },
+//   '16': { val: 16, prob: 0.007 },
+//   '17': { val: 17, prob: 0.005 },
+//   '18': { val: 18, prob: 0.003 }
+// }
